@@ -1,0 +1,43 @@
+[package]
+name = "fs_usage_sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A Rust wrapper for macOS fs_usage to monitor file system events"
+license = "MIT"
+repository = "https://github.com/yourusername/fs_usage_sys"
+keywords = ["filesystem", "monitoring", "macos", "fs_usage"]
+categories = ["filesystem", "os::macos-apis"]
+
+[dependencies]
+anyhow = "1.0"
+glob = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.36", features = ["full"] }
+crossbeam-channel = "0.5"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+tempfile = "3.9"
+ctrlc = "3.4"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+[[example]]
+name = "basic_monitor"
+path = "examples/basic_monitor.rs"
+
+[[example]]
+name = "process_filter"
+path = "examples/process_filter.rs"
+
+[[example]]
+name = "debug_monitor"
+path = "examples/debug_monitor.rs"
+
+[[example]]
+name = "writes_only"
+path = "examples/writes_only.rs"
