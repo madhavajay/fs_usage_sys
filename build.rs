@@ -17,4 +17,3 @@ fn main() {
         println!("cargo:warning=Examples must be run with: sudo cargo run --example <name>");
     }
 }
-

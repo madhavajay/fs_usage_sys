@@ -462,4 +462,3 @@ mod tests {
         assert!(OperationType::All.matches_operation("anything"));
     }
 }
-

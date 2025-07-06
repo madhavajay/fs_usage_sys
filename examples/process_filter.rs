@@ -118,4 +118,3 @@ fn categorize_event(
         other_events.push(event.clone());
     }
 }
-

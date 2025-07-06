@@ -3,7 +3,6 @@ use fs_usage_sys::{FsEvent, FsUsageMonitorBuilder};
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 
 fn main() -> Result<()> {
@@ -68,4 +67,3 @@ fn print_event(event: &FsEvent) {
         event.timestamp, event.operation, event.process_name, event.pid, event.path, event.result
     );
 }
-

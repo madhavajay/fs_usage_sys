@@ -6,9 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("fs_usage_sys=debug")
-        .init();
+    // Enable debug logging for fs_usage_sys
+    std::env::set_var("RUST_LOG", "fs_usage_sys=debug");
+    tracing_subscriber::fmt::init();
 
     let args: Vec<String> = env::args().collect();
 
@@ -65,4 +65,3 @@ fn main() -> Result<()> {
 
     Ok(())
 }
-

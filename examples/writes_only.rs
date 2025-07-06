@@ -1,5 +1,5 @@
 use anyhow::Result;
-use fs_usage_sys::{FsEvent, FsUsageMonitorBuilder, OperationType};
+use fs_usage_sys::{FsEvent, FsUsageMonitorBuilder};
 use std::env;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -94,4 +94,3 @@ fn print_write_event(event: &FsEvent, count: usize) {
         println!("✏️  TEXT EDITOR");
     }
 }
-
