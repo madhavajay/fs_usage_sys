@@ -1,0 +1,98 @@
+name: Manual Version Bump and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      force_version:
+        description: 'Force specific version (optional, overrides bump_type)'
+        required: false
+
+jobs:
+  bump-version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Setup Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+    
+    - name: Get current version
+      id: current_version
+      run: |
+        CURRENT_VERSION=$(grep '^version' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        echo "Current version: $CURRENT_VERSION"
+    
+    - name: Bump version
+      id: bump
+      run: |
+        if [ "${{ github.event.inputs.force_version }}" != "" ]; then
+          NEW_VERSION="${{ github.event.inputs.force_version }}"
+          echo "Forcing version to: $NEW_VERSION"
+        else
+          # Install semver tool if needed
+          if ! command -v semver &> /dev/null; then
+            npm install -g semver
+          fi
+          
+          CURRENT="${{ steps.current_version.outputs.CURRENT_VERSION }}"
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+          
+          # Simple version bumping logic
+          IFS='.' read -r major minor patch <<< "$CURRENT"
+          
+          case $BUMP_TYPE in
+            major)
+              NEW_VERSION="$((major + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="$major.$((minor + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="$major.$minor.$((patch + 1))"
+              ;;
+          esac
+        fi
+        
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+        # Update Cargo.toml
+        sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" Cargo.toml
+        
+        # Update Cargo.lock if it exists
+        if [ -f Cargo.lock ]; then
+          cargo update --package fs_usage_sys
+        fi
+    
+    - name: Create commit and tag
+      run: |
+        git add Cargo.toml Cargo.lock
+        git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
+        git tag -a "v${{ steps.bump.outputs.new_version }}" -m "Release v${{ steps.bump.outputs.new_version }}"
+    
+    - name: Push changes
+      run: |
+        git push origin main
+        git push origin "v${{ steps.bump.outputs.new_version }}"
+    
+    - name: Trigger release workflow
+      run: |
+        echo "Version bumped to ${{ steps.bump.outputs.new_version }}"
+        echo "Release workflow will be triggered by the new tag"

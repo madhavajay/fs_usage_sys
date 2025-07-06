@@ -2,12 +2,16 @@
 name = "fs_usage_sys"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "A Rust wrapper for macOS fs_usage to monitor file system events"
+authors = ["Madhava Jay <me@madhavajay.com>"]
+description = "A Rust wrapper for macOS fs_usage to monitor file system events with advanced filtering"
 license = "MIT"
-repository = "https://github.com/yourusername/fs_usage_sys"
-keywords = ["filesystem", "monitoring", "macos", "fs_usage"]
-categories = ["filesystem", "os::macos-apis"]
+repository = "https://github.com/madhavajay/fs_usage_sys"
+homepage = "https://github.com/madhavajay/fs_usage_sys"
+documentation = "https://docs.rs/fs_usage_sys"
+readme = "README.md"
+keywords = ["filesystem", "monitoring", "macos", "fs-usage", "file-watcher"]
+categories = ["filesystem", "os::macos-apis", "development-tools"]
+exclude = [".github/", "target/", "Cargo.lock", "*.log", "*.pid", "*.seed", "*.swp"]
 
 [dependencies]
 anyhow = "1.0"

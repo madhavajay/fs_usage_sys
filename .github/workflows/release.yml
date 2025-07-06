@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event.inputs.version }}" != "" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/v}
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Check if release exists
+      id: check_release
+      run: |
+        if gh release view "v${{ steps.get_version.outputs.version }}" > /dev/null 2>&1; then
+          echo "EXISTS=true" >> $GITHUB_OUTPUT
+        else
+          echo "EXISTS=false" >> $GITHUB_OUTPUT
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create Release
+      id: create_release
+      if: steps.check_release.outputs.EXISTS == 'false'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        release_name: Release v${{ steps.get_version.outputs.version }}
+        body: |
+          # fs_usage_sys v${{ steps.get_version.outputs.version }}
+          
+          A Rust library for monitoring file system events on macOS using fs_usage.
+          
+          ## Features
+          - Real-time file system monitoring
+          - Path filtering with glob patterns
+          - Process filtering by PID or name
+          - Operation type filtering
+          - AI assistant detection
+          
+          ## Installation
+          
+          ### As a Rust library
+          ```toml
+          [dependencies]
+          fs_usage_sys = "${{ steps.get_version.outputs.version }}"
+          ```
+          
+          ### Requirements
+          - macOS only
+          - Requires sudo/root privileges to run
+          
+          ## What's Changed
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+        draft: false
+        prerelease: false
+
+  build:
+    name: Build
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # macOS builds
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: fs_usage_sys-x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: fs_usage_sys-aarch64-apple-darwin
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+    
+    - name: Build
+      run: |
+        cargo build --release --target ${{ matrix.target }}
+        # Note: This is a library, so we package the entire crate
+        mkdir -p dist
+        cp -r src dist/
+        cp -r examples dist/
+        cp Cargo.toml dist/
+        cp README.md dist/
+        cp LICENSE dist/
+        tar -czf ${{ matrix.name }}.tar.gz -C dist .
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      if: needs.create-release.outputs.upload_url != ''
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.name }}.tar.gz
+        asset_name: ${{ matrix.name }}.tar.gz
+        asset_content_type: application/gzip
+
+  publish:
+    name: Publish to crates.io
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    
+    - name: Update version in Cargo.toml
+      run: |
+        VERSION="${{ needs.create-release.outputs.version }}"
+        sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add Cargo.toml
+        git diff --staged --quiet || git commit -m "chore: bump version to $VERSION"
+    
+    - name: Publish to crates.io
+      run: |
+        cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --allow-dirty
+      continue-on-error: true

@@ -3,7 +3,6 @@
 mod builder;
 
 pub use builder::FsUsageMonitorBuilder;
-pub use OperationType;
 
 use anyhow::{Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};

@@ -1,5 +1,10 @@
 # fs_usage_sys
 
+[![Crates.io](https://img.shields.io/crates/v/fs_usage_sys.svg)](https://crates.io/crates/fs_usage_sys)
+[![Documentation](https://docs.rs/fs_usage_sys/badge.svg)](https://docs.rs/fs_usage_sys)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![macOS](https://img.shields.io/badge/platform-macOS-blue)](https://www.apple.com/macos/)
+
 A Rust library that wraps macOS's `fs_usage` command to monitor file system events with support for glob patterns, process filtering, and operation type filtering.
 
 ## Features
@@ -42,6 +47,12 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 fs_usage_sys = "0.1.0"
+```
+
+Or use cargo add:
+
+```bash
+cargo add fs_usage_sys
 ```
 
 ## Requirements

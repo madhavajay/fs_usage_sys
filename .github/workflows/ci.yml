@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, macos-13]  # Test on multiple macOS versions
+        rust: [stable]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        override: true
+        components: rustfmt, clippy
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Check formatting
+      run: cargo fmt -- --check
+    
+    - name: Clippy
+      run: cargo clippy -- -D warnings
+    
+    - name: Run tests
+      run: |
+        # Some tests require sudo (fs_usage), so we run them separately
+        cargo test --lib
+        # Note: Integration tests that require sudo will be skipped in CI
+    
+    - name: Build
+      run: cargo build --verbose
+    
+    - name: Build examples
+      run: |
+        cargo build --example basic_monitor
+        cargo build --example process_filter
+        cargo build --example debug_monitor
+        cargo build --example writes_only
+
+  version-check:
+    name: Version Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Check if version was bumped
+      run: |
+        # Get version from main branch
+        git checkout main
+        MAIN_VERSION=$(grep '^version' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        
+        # Get version from PR branch
+        git checkout ${{ github.head_ref }}
+        PR_VERSION=$(grep '^version' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        
+        echo "Main version: $MAIN_VERSION"
+        echo "PR version: $PR_VERSION"
+        
+        if [ "$MAIN_VERSION" = "$PR_VERSION" ]; then
+          echo "::warning::Version was not bumped. Consider updating the version in Cargo.toml"
+        fi
