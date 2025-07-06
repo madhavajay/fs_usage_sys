@@ -1,0 +1,180 @@
+name: Bump and Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bump-and-release:
+    name: Bump Version and Release
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: bump version')"
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Determine version bump
+      id: version
+      run: |
+        # Get current version
+        CURRENT_VERSION=$(grep '^version' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "Current version: $CURRENT_VERSION"
+        
+        # Determine bump type
+        if [ "${{ github.event.inputs.bump_type }}" != "" ] && [ "${{ github.event.inputs.bump_type }}" != "auto" ]; then
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+        else
+          # Auto-detect from commits
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          COMMITS=$(git log --pretty=format:"%s" "$LAST_TAG"..HEAD)
+          
+          BUMP_TYPE="patch"
+          if echo "$COMMITS" | grep -qE "^(feat|feature):"; then
+            BUMP_TYPE="minor"
+          fi
+          if echo "$COMMITS" | grep -qE "^(BREAKING CHANGE|breaking):"; then
+            BUMP_TYPE="major"
+          fi
+        fi
+        
+        # Parse and bump version
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+        case "$BUMP_TYPE" in
+          major)
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            ;;
+          minor)
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            ;;
+          patch)
+            PATCH=$((PATCH + 1))
+            ;;
+        esac
+        
+        NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        echo "New version: $NEW_VERSION (bump type: $BUMP_TYPE)"
+        
+        # Update Cargo.toml
+        sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" Cargo.toml
+        
+        # Update Cargo.lock
+        cargo update --workspace
+        
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Commit version bump
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add Cargo.toml Cargo.lock
+        git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
+        git push origin main
+    
+    - name: Create GitHub Release
+      id: create_release
+      run: |
+        # Generate changelog
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          CHANGES="Initial release"
+        else
+          CHANGES=$(git log --pretty=format:"- %s" "$LAST_TAG"..HEAD | grep -v "chore: bump version")
+        fi
+        
+        # Create release
+        gh release create "v${{ steps.version.outputs.new_version }}" \
+          --title "Release v${{ steps.version.outputs.new_version }}" \
+          --notes "$(cat <<EOF
+        # fs_usage_sys v${{ steps.version.outputs.new_version }}
+        
+        ## What's Changed
+        $CHANGES
+        
+        ## Installation
+        
+        \`\`\`toml
+        [dependencies]
+        fs_usage_sys = "${{ steps.version.outputs.new_version }}"
+        \`\`\`
+        
+        ## Requirements
+        - macOS only
+        - Requires sudo/root privileges to run
+        EOF
+        )"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build for macOS targets
+      run: |
+        # Install targets
+        rustup target add x86_64-apple-darwin
+        rustup target add aarch64-apple-darwin
+        
+        # Build for both architectures
+        cargo build --release --target x86_64-apple-darwin
+        cargo build --release --target aarch64-apple-darwin
+        
+        # Package library files
+        for target in x86_64-apple-darwin aarch64-apple-darwin; do
+          mkdir -p "dist-$target"
+          cp -r src "dist-$target/"
+          cp -r examples "dist-$target/"
+          cp Cargo.toml "dist-$target/"
+          cp README.md "dist-$target/"
+          cp LICENSE "dist-$target/"
+          tar -czf "fs_usage_sys-$target.tar.gz" -C "dist-$target" .
+          
+          # Upload to release
+          gh release upload "v${{ steps.version.outputs.new_version }}" \
+            "fs_usage_sys-$target.tar.gz" \
+            --clobber
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      if: runner.os == 'macOS'
+      continue-on-error: true
+    
+    - name: Publish to crates.io
+      run: |
+        cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      continue-on-error: true
+    
+    - name: Summary
+      run: |
+        echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Version bumped from ${{ steps.version.outputs.current_version }} to ${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Git tag created: v${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ GitHub Release created" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- Check the [release page](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY
+        echo "- Verify the package on [crates.io](https://crates.io/crates/fs_usage_sys)" >> $GITHUB_STEP_SUMMARY
