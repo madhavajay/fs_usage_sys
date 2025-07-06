@@ -11,7 +11,7 @@ fn main() -> Result<()> {
         .init();
 
     let args: Vec<String> = env::args().collect();
-    
+
     let mut builder = FsUsageMonitorBuilder::new();
 
     if args.len() > 1 {
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
     }
 
     let mut monitor = builder.build()?;
-    
+
     println!("Starting file system monitor (debug mode)...");
     println!("This will show raw fs_usage output parsing");
     monitor.start()?;
@@ -65,3 +65,4 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+

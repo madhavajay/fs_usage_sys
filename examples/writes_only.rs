@@ -9,9 +9,9 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args: Vec<String> = env::args().collect();
-    
+
     let mut builder = FsUsageMonitorBuilder::new()
-        .watch_writes_only()  // Only watch write operations
+        .watch_writes_only() // Only watch write operations
         .exclude_process("mds")
         .exclude_process("mdworker")
         .exclude_process("Spotlight");
@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     }
 
     let mut monitor = builder.build()?;
-    
+
     println!("Starting file system monitor (WRITES ONLY)...");
     println!("This will only show: writes, creates, deletes, moves");
     println!("Try: echo 'test' > /tmp/test.txt");
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             Ok(event) => {
                 event_count += 1;
                 print_write_event(&event, event_count);
-                
+
                 // Stop after 50 events to prevent spam
                 if event_count >= 50 {
                     println!("\nStopping after 50 events...");
@@ -74,20 +74,24 @@ fn main() -> Result<()> {
 fn print_write_event(event: &FsEvent, count: usize) {
     let operation_type = match event.operation.as_str() {
         op if op.contains("write") || op.contains("WrData") => "✏️  WRITE",
-        op if op.contains("open") || op.contains("creat") => "📄 CREATE", 
+        op if op.contains("open") || op.contains("creat") => "📄 CREATE",
         op if op.contains("unlink") || op.contains("rmdir") => "🗑️  DELETE",
         op if op.contains("rename") => "📁 MOVE",
         _ => "💾 MODIFY",
     };
 
     println!("\n=== Write Event #{} ===", count);
-    println!("{} | {} [{}:{}]", operation_type, event.operation, event.process_name, event.pid);
+    println!(
+        "{} | {} [{}:{}]",
+        operation_type, event.operation, event.process_name, event.pid
+    );
     println!("📍 Path: {}", event.path);
     println!("⏰ Time: {}", event.timestamp);
-    
+
     if event.process_name.contains("Cursor") || event.process_name.contains("Code") {
         println!("⚠️  AI ASSISTANT DETECTED");
     } else if event.process_name.contains("vim") || event.process_name.contains("nano") {
         println!("✏️  TEXT EDITOR");
     }
 }
+

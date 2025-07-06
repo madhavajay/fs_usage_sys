@@ -10,7 +10,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args: Vec<String> = env::args().collect();
-    
+
     let mut builder = FsUsageMonitorBuilder::new();
 
     if args.len() > 1 {
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
         .exclude_process("kernel_task");
 
     let mut monitor = builder.build()?;
-    
+
     println!("Starting file system monitor...");
     monitor.start()?;
 
@@ -65,11 +65,7 @@ fn main() -> Result<()> {
 fn print_event(event: &FsEvent) {
     println!(
         "{} | {} [{}:{}] | {} | {}",
-        event.timestamp,
-        event.operation,
-        event.process_name,
-        event.pid,
-        event.path,
-        event.result
+        event.timestamp, event.operation, event.process_name, event.pid, event.path, event.result
     );
 }
+

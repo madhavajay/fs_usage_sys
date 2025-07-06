@@ -35,7 +35,7 @@ fn main() -> Result<()> {
 
     println!("Starting monitor with process filtering...");
     println!("Excluding: current process, mds, mdworker, Spotlight");
-    
+
     monitor.start()?;
 
     let running = Arc::new(AtomicBool::new(true));
@@ -53,14 +53,19 @@ fn main() -> Result<()> {
     while running.load(Ordering::SeqCst) {
         match monitor.events().recv_timeout(Duration::from_millis(100)) {
             Ok(event) => {
-                categorize_event(&event, &mut claude_events, &mut editor_events, &mut other_events);
-                
+                categorize_event(
+                    &event,
+                    &mut claude_events,
+                    &mut editor_events,
+                    &mut other_events,
+                );
+
                 println!("\n--- Event ---");
                 println!("Process: {} (PID: {})", event.process_name, event.pid);
                 println!("Operation: {}", event.operation);
                 println!("Path: {}", event.path);
                 println!("Result: {}", event.result);
-                
+
                 if is_claude_process(&event.process_name) {
                     println!("⚠️  CLAUDE DETECTED - File change by AI assistant");
                 } else if is_editor_process(&event.process_name) {
@@ -80,7 +85,7 @@ fn main() -> Result<()> {
     }
 
     monitor.stop()?;
-    
+
     println!("\n=== Summary ===");
     println!("Claude events: {}", claude_events.len());
     println!("Editor events: {}", editor_events.len());
@@ -113,3 +118,4 @@ fn categorize_event(
         other_events.push(event.clone());
     }
 }
+

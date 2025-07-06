@@ -18,7 +18,9 @@ impl FsUsageMonitorBuilder {
     }
 
     pub fn watch_paths(mut self, paths: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.config.watch_paths.extend(paths.into_iter().map(|p| p.into()));
+        self.config
+            .watch_paths
+            .extend(paths.into_iter().map(|p| p.into()));
         self
     }
 
@@ -47,8 +49,13 @@ impl FsUsageMonitorBuilder {
         self
     }
 
-    pub fn exclude_processes(mut self, processes: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.config.exclude_processes.extend(processes.into_iter().map(|p| p.into()));
+    pub fn exclude_processes(
+        mut self,
+        processes: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.config
+            .exclude_processes
+            .extend(processes.into_iter().map(|p| p.into()));
         self
     }
 
@@ -58,7 +65,12 @@ impl FsUsageMonitorBuilder {
     }
 
     pub fn watch_writes_only(mut self) -> Self {
-        self.config.operation_types = vec![OperationType::Write, OperationType::Create, OperationType::Delete, OperationType::Move];
+        self.config.operation_types = vec![
+            OperationType::Write,
+            OperationType::Create,
+            OperationType::Delete,
+            OperationType::Move,
+        ];
         self
     }
 
@@ -68,7 +80,13 @@ impl FsUsageMonitorBuilder {
     }
 
     pub fn exclude_metadata(mut self) -> Self {
-        self.config.operation_types = vec![OperationType::Read, OperationType::Write, OperationType::Create, OperationType::Delete, OperationType::Move];
+        self.config.operation_types = vec![
+            OperationType::Read,
+            OperationType::Write,
+            OperationType::Create,
+            OperationType::Delete,
+            OperationType::Move,
+        ];
         self
     }
 
@@ -82,3 +100,4 @@ impl Default for FsUsageMonitorBuilder {
         Self::new()
     }
 }
+

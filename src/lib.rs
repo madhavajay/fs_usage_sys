@@ -40,13 +40,46 @@ impl OperationType {
     pub fn matches_operation(&self, operation: &str) -> bool {
         match self {
             OperationType::All => true,
-            OperationType::Read => matches!(operation, "read" | "pread" | "readv" | "preadv" | "RdData" | "RdMeta"),
-            OperationType::Write => matches!(operation, "write" | "pwrite" | "writev" | "pwritev" | "WrData" | "WrMeta" | "ftruncate"),
-            OperationType::Create => matches!(operation, "open" | "creat" | "mkdir" | "mkfifo" | "mknod" | "symlink" | "link"),
+            OperationType::Read => matches!(
+                operation,
+                "read" | "pread" | "readv" | "preadv" | "RdData" | "RdMeta"
+            ),
+            OperationType::Write => matches!(
+                operation,
+                "write" | "pwrite" | "writev" | "pwritev" | "WrData" | "WrMeta" | "ftruncate"
+            ),
+            OperationType::Create => matches!(
+                operation,
+                "open" | "creat" | "mkdir" | "mkfifo" | "mknod" | "symlink" | "link"
+            ),
             OperationType::Delete => matches!(operation, "unlink" | "rmdir" | "remove"),
             OperationType::Move => matches!(operation, "rename" | "renameat"),
-            OperationType::Access => matches!(operation, "access" | "faccessat" | "stat" | "stat64" | "lstat" | "lstat64" | "fstat" | "fstat64"),
-            OperationType::Metadata => matches!(operation, "stat" | "stat64" | "lstat" | "lstat64" | "fstat" | "fstat64" | "getxattr" | "setxattr" | "listxattr" | "removexattr" | "getattrlist" | "setattrlist"),
+            OperationType::Access => matches!(
+                operation,
+                "access"
+                    | "faccessat"
+                    | "stat"
+                    | "stat64"
+                    | "lstat"
+                    | "lstat64"
+                    | "fstat"
+                    | "fstat64"
+            ),
+            OperationType::Metadata => matches!(
+                operation,
+                "stat"
+                    | "stat64"
+                    | "lstat"
+                    | "lstat64"
+                    | "fstat"
+                    | "fstat64"
+                    | "getxattr"
+                    | "setxattr"
+                    | "listxattr"
+                    | "removexattr"
+                    | "getattrlist"
+                    | "setattrlist"
+            ),
         }
     }
 }
@@ -220,7 +253,7 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
     // 23:52:52.781431  fstatat64              [  2]           [-2]/private/tmp/test123.txt                                                                                                                                          0.001226   touch.3523509
     // 23:52:51.346567  lstat64                [  2]           private/tmp/LittleSnitchDebugLogs                                                                                                                                     0.000025   at.obdev.littlesnitch.networkex.3515250
     // 23:57:54.210609  read              F=86   B=0xea                                                                                                                                                                              0.000001   ghostty.3386479
-    
+
     let parts: Vec<&str> = line.split_whitespace().collect();
     if parts.len() < 4 {
         return None;
@@ -228,10 +261,10 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
 
     let timestamp = parts[0].to_string();
     let operation = parts[1].to_string();
-    
+
     // Find the process.pid at the end (last part)
     let process_info = parts.last()?;
-    
+
     // Parse process name and PID (format: processname.pid)
     let dot_pos = process_info.rfind('.')?;
     let process_name = process_info[..dot_pos].to_string();
@@ -241,12 +274,18 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
     // Skip timestamp, operation, and look for the path
     let mut path_parts = Vec::new();
     let mut found_path_start = false;
-    
+
     for (i, part) in parts.iter().enumerate() {
-        if i < 2 { continue; } // Skip timestamp and operation
-        if i == parts.len() - 1 { break; } // Skip process.pid at end
-        if i == parts.len() - 2 { break; } // Skip duration before process.pid
-        
+        if i < 2 {
+            continue;
+        } // Skip timestamp and operation
+        if i == parts.len() - 1 {
+            break;
+        } // Skip process.pid at end
+        if i == parts.len() - 2 {
+            break;
+        } // Skip duration before process.pid
+
         // Skip optional info like [  2], F=86, B=0xea
         if part.starts_with('[') && part.ends_with(']') {
             continue;
@@ -254,7 +293,7 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
         if part.starts_with("F=") || part.starts_with("B=") {
             continue;
         }
-        
+
         // Look for path indicators
         if part.contains('/') || found_path_start {
             found_path_start = true;
@@ -267,15 +306,20 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
         return None;
     }
 
-    let path = path_parts.join(" ").split("Err#").next()?.trim().to_string();
-    
+    let path = path_parts
+        .join(" ")
+        .split("Err#")
+        .next()?
+        .trim()
+        .to_string();
+
     // Clean up path - remove [-2] prefixes and normalize
     let path = if path.starts_with("[-") {
         path.split("]").nth(1)?.to_string()
     } else {
         path
     };
-    
+
     // Convert private/tmp to /tmp etc
     let path = if path.starts_with("private/tmp") {
         path.replace("private/tmp", "/tmp")
@@ -291,7 +335,11 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
     }
 
     let result = if line.contains("Err#") {
-        line.split("Err#").nth(1)?.split_whitespace().next()?.to_string()
+        line.split("Err#")
+            .nth(1)?
+            .split_whitespace()
+            .next()?
+            .to_string()
     } else {
         "OK".to_string()
     };
@@ -307,8 +355,11 @@ fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
 }
 
 fn should_send_event(event: &FsEvent, patterns: &[Pattern], config: &FsUsageConfig) -> bool {
-    debug!("Checking event: pid={}, operation={}, path={}", event.pid, event.operation, event.path);
-    
+    debug!(
+        "Checking event: pid={}, operation={}, path={}",
+        event.pid, event.operation, event.path
+    );
+
     if config.exclude_pids.contains(&event.pid) {
         debug!("Event excluded by PID: {}", event.pid);
         return false;
@@ -321,7 +372,10 @@ fn should_send_event(event: &FsEvent, patterns: &[Pattern], config: &FsUsageConf
 
     // Check operation type filtering
     if !config.operation_types.contains(&OperationType::All) {
-        let matches_operation = config.operation_types.iter().any(|op_type| op_type.matches_operation(&event.operation));
+        let matches_operation = config
+            .operation_types
+            .iter()
+            .any(|op_type| op_type.matches_operation(&event.operation));
         if !matches_operation {
             debug!("Event operation '{}' not in allowed types", event.operation);
             return false;
@@ -335,13 +389,21 @@ fn should_send_event(event: &FsEvent, patterns: &[Pattern], config: &FsUsageConf
 
     for pattern in patterns {
         if pattern.matches(&event.path) {
-            debug!("Pattern '{}' matches path '{}'", pattern.as_str(), event.path);
+            debug!(
+                "Pattern '{}' matches path '{}'",
+                pattern.as_str(),
+                event.path
+            );
             return true;
         } else {
-            debug!("Pattern '{}' does NOT match path '{}'", pattern.as_str(), event.path);
+            debug!(
+                "Pattern '{}' does NOT match path '{}'",
+                pattern.as_str(),
+                event.path
+            );
         }
     }
-    
+
     false
 }
 
@@ -388,15 +450,16 @@ mod tests {
         assert!(OperationType::Write.matches_operation("write"));
         assert!(OperationType::Write.matches_operation("WrData"));
         assert!(!OperationType::Write.matches_operation("read"));
-        
+
         assert!(OperationType::Read.matches_operation("read"));
         assert!(OperationType::Read.matches_operation("RdData"));
         assert!(!OperationType::Read.matches_operation("write"));
-        
+
         assert!(OperationType::Create.matches_operation("open"));
         assert!(OperationType::Delete.matches_operation("unlink"));
         assert!(OperationType::Move.matches_operation("rename"));
-        
+
         assert!(OperationType::All.matches_operation("anything"));
     }
 }
+
