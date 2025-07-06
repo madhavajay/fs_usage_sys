@@ -2,10 +2,7 @@ fn main() {
     // Ensure we're building for macOS
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     if target_os != "macos" {
-        panic!(
-            "fs_usage_sys only works on macOS. Current target OS: {}",
-            target_os
-        );
+        panic!("fs_usage_sys only works on macOS. Current target OS: {target_os}");
     }
 
     // Print cargo metadata
