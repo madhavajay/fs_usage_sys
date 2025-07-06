@@ -18,7 +18,6 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
     - uses: actions/checkout@v4
@@ -48,40 +47,39 @@ jobs:
     - name: Create Release
       id: create_release
       if: steps.check_release.outputs.EXISTS == 'false'
-      uses: actions/create-release@v1
+      run: |
+        gh release create "v${{ steps.get_version.outputs.version }}" \
+          --title "Release v${{ steps.get_version.outputs.version }}" \
+          --notes "$(cat <<'EOF'
+        # fs_usage_sys v${{ steps.get_version.outputs.version }}
+        
+        A Rust library for monitoring file system events on macOS using fs_usage.
+        
+        ## Features
+        - Real-time file system monitoring
+        - Path filtering with glob patterns
+        - Process filtering by PID or name
+        - Operation type filtering
+        - AI assistant detection
+        
+        ## Installation
+        
+        ### As a Rust library
+        ```toml
+        [dependencies]
+        fs_usage_sys = "${{ steps.get_version.outputs.version }}"
+        ```
+        
+        ### Requirements
+        - macOS only
+        - Requires sudo/root privileges to run
+        
+        ## What's Changed
+        See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+        EOF
+        )"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: v${{ steps.get_version.outputs.version }}
-        release_name: Release v${{ steps.get_version.outputs.version }}
-        body: |
-          # fs_usage_sys v${{ steps.get_version.outputs.version }}
-          
-          A Rust library for monitoring file system events on macOS using fs_usage.
-          
-          ## Features
-          - Real-time file system monitoring
-          - Path filtering with glob patterns
-          - Process filtering by PID or name
-          - Operation type filtering
-          - AI assistant detection
-          
-          ## Installation
-          
-          ### As a Rust library
-          ```toml
-          [dependencies]
-          fs_usage_sys = "${{ steps.get_version.outputs.version }}"
-          ```
-          
-          ### Requirements
-          - macOS only
-          - Requires sudo/root privileges to run
-          
-          ## What's Changed
-          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
-        draft: false
-        prerelease: false
 
   build:
     name: Build
@@ -120,15 +118,12 @@ jobs:
         tar -czf ${{ matrix.name }}.tar.gz -C dist .
     
     - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      if: needs.create-release.outputs.upload_url != ''
+      run: |
+        gh release upload "v${{ needs.create-release.outputs.version }}" \
+          "${{ matrix.name }}.tar.gz" \
+          --clobber
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./${{ matrix.name }}.tar.gz
-        asset_name: ${{ matrix.name }}.tar.gz
-        asset_content_type: application/gzip
 
   publish:
     name: Publish to crates.io
