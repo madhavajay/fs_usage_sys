@@ -22,23 +22,28 @@ A Rust library that wraps macOS's `fs_usage` command to monitor file system even
 ```rust
 use fs_usage_sys::{FsUsageMonitorBuilder, OperationType};
 
-// Monitor only file modifications (no reads/stats)
+// Monitor file system operations
 let mut monitor = FsUsageMonitorBuilder::new()
     .watch_path("/Users/*/Documents/**/*")
-    .watch_writes_only()
     .exclude_process("mds")
+    .exclude_process("mdworker")
     .build()?;
 
 monitor.start()?;
 
 while let Ok(event) = monitor.recv() {
-    if event.process_name.contains("Cursor") {
-        println!("🤖 AI modified: {}", event.path);
-    } else {
-        println!("👤 Manual edit: {}", event.path);
+    // Detect write operations (see docs/detecting_writes.md for patterns)
+    if is_write_operation(&event) {
+        if event.process_name.contains("Cursor") {
+            println!("🤖 AI modified: {}", event.path);
+        } else {
+            println!("👤 Manual edit: {}", event.path);
+        }
     }
 }
 ```
+
+**Important**: Don't use `watch_writes_only()` as it filters too aggressively. See [Detecting Write Operations](docs/detecting_writes.md) for comprehensive write detection patterns.
 
 ## Installation
 

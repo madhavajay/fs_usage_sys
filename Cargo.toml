@@ -45,3 +45,11 @@ path = "examples/debug_monitor.rs"
 [[example]]
 name = "writes_only"
 path = "examples/writes_only.rs"
+
+[[example]]
+name = "monitor_directory"
+path = "examples/monitor_directory.rs"
+
+[[example]]
+name = "monitor_all_ops"
+path = "examples/monitor_all_ops.rs"
