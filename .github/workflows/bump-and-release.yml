@@ -80,6 +80,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: success()
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -185,40 +187,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Build for macOS targets
-      run: |
-        # Install targets
-        rustup target add x86_64-apple-darwin
-        rustup target add aarch64-apple-darwin
-        
-        # Build for both architectures
-        cargo build --release --target x86_64-apple-darwin
-        cargo build --release --target aarch64-apple-darwin
-        
-        # Package library files
-        for target in x86_64-apple-darwin aarch64-apple-darwin; do
-          mkdir -p "dist-$target"
-          cp -r src "dist-$target/"
-          cp -r examples "dist-$target/"
-          cp Cargo.toml "dist-$target/"
-          cp README.md "dist-$target/"
-          cp LICENSE "dist-$target/"
-          tar -czf "fs_usage_sys-$target.tar.gz" -C "dist-$target" .
-          
-          # Upload to release
-          gh release upload "v${{ steps.version.outputs.new_version }}" \
-            "fs_usage_sys-$target.tar.gz" \
-            --clobber
-        done
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      if: runner.os == 'macOS'
-      continue-on-error: true
-    
     - name: Publish to crates.io
       run: |
         cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      continue-on-error: true
     
     - name: Summary
       run: |
@@ -231,3 +202,42 @@ jobs:
         echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
         echo "- Check the [release page](https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.new_version }})" >> $GITHUB_STEP_SUMMARY
         echo "- Verify the package on [crates.io](https://crates.io/crates/fs_usage_sys)" >> $GITHUB_STEP_SUMMARY
+
+  build-release-artifacts:
+    name: Build Release Artifacts
+    runs-on: macos-latest
+    needs: bump-and-release
+    if: success()
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: main  # Get the latest version after bump
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    
+    - name: Build
+      run: |
+        cargo build --release --target ${{ matrix.target }}
+        
+        # Package library files
+        mkdir -p dist
+        cp -r src dist/
+        cp -r examples dist/
+        cp Cargo.toml dist/
+        cp README.md dist/
+        cp LICENSE dist/
+        tar -czf fs_usage_sys-${{ matrix.target }}.tar.gz -C dist .
+    
+    - name: Upload to Release
+      run: |
+        gh release upload "v${{ needs.bump-and-release.outputs.new_version }}" \
+          "fs_usage_sys-${{ matrix.target }}.tar.gz" \
+          --clobber
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
