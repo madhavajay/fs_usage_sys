@@ -266,7 +266,7 @@ mod macos_impl {
         }
     }
 
-    fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
+    pub(super) fn parse_fs_usage_line(line: &str) -> Option<FsEvent> {
         // fs_usage format examples:
         // 23:52:52.781431  fstatat64              [  2]           [-2]/private/tmp/test123.txt                                                                                                                                          0.001226   touch.3523509
         // 23:52:51.346567  lstat64                [  2]           private/tmp/LittleSnitchDebugLogs                                                                                                                                     0.000025   at.obdev.littlesnitch.networkex.3515250
@@ -424,6 +424,63 @@ mod macos_impl {
 
         false
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use glob::Pattern;
+
+        #[test]
+        fn test_parse_fs_usage_line() {
+            // Test actual fs_usage format
+            let line = "23:52:52.781431  fstatat64              [  2]           [-2]/private/tmp/test123.txt                                                                                                                                          0.001226   touch.3523509";
+            let event = parse_fs_usage_line(line).unwrap();
+            assert_eq!(event.timestamp, "23:52:52.781431");
+            assert_eq!(event.operation, "fstatat64");
+            assert_eq!(event.process_name, "touch");
+            assert_eq!(event.pid, 3523509);
+            assert_eq!(event.path, "/tmp/test123.txt");
+
+            // Test another format
+            let line2 = "23:52:51.346567  lstat64                [  2]           private/tmp/LittleSnitchDebugLogs                                                                                                                                     0.000025   at.obdev.littlesnitch.networkex.3515250";
+            let event2 = parse_fs_usage_line(line2).unwrap();
+            assert_eq!(event2.operation, "lstat64");
+            assert_eq!(event2.process_name, "at.obdev.littlesnitch.networkex");
+            assert_eq!(event2.pid, 3515250);
+            assert_eq!(event2.path, "/tmp/LittleSnitchDebugLogs");
+        }
+
+        #[test]
+        fn test_glob_patterns() {
+            let pattern = Pattern::new("/Users/*/Documents/*.txt").unwrap();
+            assert!(pattern.matches("/Users/john/Documents/file.txt"));
+            assert!(!pattern.matches("/Users/john/Downloads/file.txt"));
+
+            // Test recursive glob
+            let pattern2 = Pattern::new("/tmp/**/*").unwrap();
+            assert!(pattern2.matches("/tmp/test.txt"));
+            assert!(pattern2.matches("/tmp/a/b/c/test.txt"));
+            assert!(pattern2.matches("/tmp/subfolder/file.log"));
+            assert!(!pattern2.matches("/var/tmp/test.txt"));
+        }
+
+        #[test]
+        fn test_operation_filtering() {
+            assert!(OperationType::Write.matches_operation("write"));
+            assert!(OperationType::Write.matches_operation("WrData"));
+            assert!(!OperationType::Write.matches_operation("read"));
+
+            assert!(OperationType::Read.matches_operation("read"));
+            assert!(OperationType::Read.matches_operation("RdData"));
+            assert!(!OperationType::Read.matches_operation("write"));
+
+            assert!(OperationType::Create.matches_operation("open"));
+            assert!(OperationType::Delete.matches_operation("unlink"));
+            assert!(OperationType::Move.matches_operation("rename"));
+
+            assert!(OperationType::All.matches_operation("anything"));
+        }
+    }
 }
 
 // Re-export macOS implementation
@@ -437,62 +494,3 @@ pub struct FsUsageConfig;
 
 #[cfg(not(target_os = "macos"))]
 pub struct FsUsageMonitor;
-
-#[cfg(test)]
-#[cfg(target_os = "macos")]
-mod tests {
-    use super::macos_impl::*;
-    use super::*;
-    use glob::Pattern;
-
-    #[test]
-    fn test_parse_fs_usage_line() {
-        // Test actual fs_usage format
-        let line = "23:52:52.781431  fstatat64              [  2]           [-2]/private/tmp/test123.txt                                                                                                                                          0.001226   touch.3523509";
-        let event = parse_fs_usage_line(line).unwrap();
-        assert_eq!(event.timestamp, "23:52:52.781431");
-        assert_eq!(event.operation, "fstatat64");
-        assert_eq!(event.process_name, "touch");
-        assert_eq!(event.pid, 3523509);
-        assert_eq!(event.path, "/tmp/test123.txt");
-
-        // Test another format
-        let line2 = "23:52:51.346567  lstat64                [  2]           private/tmp/LittleSnitchDebugLogs                                                                                                                                     0.000025   at.obdev.littlesnitch.networkex.3515250";
-        let event2 = parse_fs_usage_line(line2).unwrap();
-        assert_eq!(event2.operation, "lstat64");
-        assert_eq!(event2.process_name, "at.obdev.littlesnitch.networkex");
-        assert_eq!(event2.pid, 3515250);
-        assert_eq!(event2.path, "/tmp/LittleSnitchDebugLogs");
-    }
-
-    #[test]
-    fn test_glob_patterns() {
-        let pattern = Pattern::new("/Users/*/Documents/*.txt").unwrap();
-        assert!(pattern.matches("/Users/john/Documents/file.txt"));
-        assert!(!pattern.matches("/Users/john/Downloads/file.txt"));
-
-        // Test recursive glob
-        let pattern2 = Pattern::new("/tmp/**/*").unwrap();
-        assert!(pattern2.matches("/tmp/test.txt"));
-        assert!(pattern2.matches("/tmp/a/b/c/test.txt"));
-        assert!(pattern2.matches("/tmp/subfolder/file.log"));
-        assert!(!pattern2.matches("/var/tmp/test.txt"));
-    }
-
-    #[test]
-    fn test_operation_filtering() {
-        assert!(OperationType::Write.matches_operation("write"));
-        assert!(OperationType::Write.matches_operation("WrData"));
-        assert!(!OperationType::Write.matches_operation("read"));
-
-        assert!(OperationType::Read.matches_operation("read"));
-        assert!(OperationType::Read.matches_operation("RdData"));
-        assert!(!OperationType::Read.matches_operation("write"));
-
-        assert!(OperationType::Create.matches_operation("open"));
-        assert!(OperationType::Delete.matches_operation("unlink"));
-        assert!(OperationType::Move.matches_operation("rename"));
-
-        assert!(OperationType::All.matches_operation("anything"));
-    }
-}
