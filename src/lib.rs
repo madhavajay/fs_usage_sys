@@ -6,7 +6,7 @@ mod builder;
 #[cfg(not(target_os = "macos"))]
 mod builder {
     pub struct FsUsageMonitorBuilder;
-    
+
     impl FsUsageMonitorBuilder {
         pub fn new() -> Self {
             panic!("fs_usage_sys only works on macOS")
@@ -441,8 +441,8 @@ pub struct FsUsageMonitor;
 #[cfg(test)]
 #[cfg(target_os = "macos")]
 mod tests {
-    use super::*;
     use super::macos_impl::*;
+    use super::*;
     use glob::Pattern;
 
     #[test]
