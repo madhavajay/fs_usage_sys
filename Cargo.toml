@@ -1,6 +1,6 @@
 [package]
 name = "fs_usage_sys"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Madhava Jay <me@madhavajay.com>"]
 description = "A Rust wrapper for macOS fs_usage to monitor file system events with advanced filtering"
