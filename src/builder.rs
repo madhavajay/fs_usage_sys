@@ -74,6 +74,16 @@ impl FsUsageMonitorBuilder {
         self
     }
 
+    pub fn watch_mutations_only(mut self) -> Self {
+        self.config.operation_types = vec![
+            OperationType::Write,
+            OperationType::Delete,
+            OperationType::Move,
+            OperationType::Chmod,
+        ];
+        self
+    }
+
     pub fn watch_reads_only(mut self) -> Self {
         self.config.operation_types = vec![OperationType::Read];
         self
@@ -87,6 +97,11 @@ impl FsUsageMonitorBuilder {
             OperationType::Delete,
             OperationType::Move,
         ];
+        self
+    }
+
+    pub fn exact_path_matching(mut self, enabled: bool) -> Self {
+        self.config.exact_path_matching = enabled;
         self
     }
 

@@ -38,6 +38,7 @@ pub enum OperationType {
     Move,
     Access,
     Metadata,
+    Chmod,
     All,
 }
 
@@ -64,8 +65,8 @@ mod macos_impl {
                 ),
                 OperationType::Write => matches!(
                     operation,
-                    "write" | "pwrite" | "writev" | "pwritev" | "WrData" | "WrMeta" | "ftruncate"
-                ),
+                    "write" | "pwrite" | "writev" | "pwritev" | "WrData" | "WrMeta" | "ftruncate" | "rename" | "unlink" | "chmod_extended"
+                ) || operation.starts_with("WrData["),
                 OperationType::Create => matches!(
                     operation,
                     "open" | "creat" | "mkdir" | "mkfifo" | "mknod" | "symlink" | "link"
@@ -98,6 +99,7 @@ mod macos_impl {
                         | "getattrlist"
                         | "setattrlist"
                 ),
+                OperationType::Chmod => matches!(operation, "chmod" | "chmod_extended"),
             }
         }
     }
@@ -109,6 +111,7 @@ mod macos_impl {
         pub exclude_pids: Vec<u32>,
         pub exclude_processes: Vec<String>,
         pub operation_types: Vec<OperationType>,
+        pub exact_path_matching: bool,
     }
 
     impl Default for FsUsageConfig {
@@ -117,8 +120,9 @@ mod macos_impl {
                 watch_paths: vec![],
                 watch_pids: vec![],
                 exclude_pids: vec![],
-                exclude_processes: vec![],
+                exclude_processes: vec!["mds".to_string(), "mdworker".to_string(), "fseventsd".to_string()],
                 operation_types: vec![OperationType::All],
+                exact_path_matching: false,
             }
         }
     }
@@ -161,9 +165,7 @@ mod macos_impl {
             let mut cmd = Command::new("fs_usage");
             cmd.arg("-w")  // Wide format for detailed output
                 .arg("-f")
-                .arg("filesys")
-                .arg("-f")
-                .arg("diskio")  // Also capture disk I/O events for WrData
+                .arg("pathname,filesys")  // Both pathname and filesys events for better coverage
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null());
 
@@ -290,7 +292,7 @@ mod macos_impl {
         let process_name = process_info[..dot_pos].to_string();
         let pid = process_info[dot_pos + 1..].parse::<u32>().ok()?;
 
-        // Special handling for WrData/RdData operations
+        // Special handling for WrData/RdData operations (includes WrData[A], WrData[AT3], etc.)
         if operation.starts_with("WrData") || operation.starts_with("RdData") {
             // WrData format: timestamp WrData[A] D=0x... B=0x... /dev/disk... actual/path duration W process.pid
             let mut actual_path = None;
@@ -449,11 +451,35 @@ mod macos_impl {
             }
         }
 
-        if patterns.is_empty() {
-            debug!("No patterns, allowing event");
+        if config.watch_paths.is_empty() && patterns.is_empty() {
+            debug!("No watch paths or patterns, allowing event");
             return true;
         }
 
+        // If exact path matching is enabled, check direct path containment
+        if config.exact_path_matching && !config.watch_paths.is_empty() {
+            for watch_path in &config.watch_paths {
+                let abs_path = format!("{}/", watch_path.trim_end_matches('/'));
+                let rel_path = format!(
+                    "{}/",
+                    std::path::Path::new(watch_path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(watch_path)
+                );
+                
+                if event.path.contains(&abs_path) || event.path.contains(&rel_path) {
+                    debug!(
+                        "Exact match: path '{}' contains '{}' or '{}'",
+                        event.path, abs_path, rel_path
+                    );
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Fall back to pattern matching
         for pattern in patterns {
             if pattern.matches(&event.path) {
                 debug!(
@@ -531,6 +557,8 @@ mod macos_impl {
         fn test_operation_filtering() {
             assert!(OperationType::Write.matches_operation("write"));
             assert!(OperationType::Write.matches_operation("WrData"));
+            assert!(OperationType::Write.matches_operation("WrData[A]"));
+            assert!(OperationType::Write.matches_operation("WrData[AT3]"));
             assert!(!OperationType::Write.matches_operation("read"));
 
             assert!(OperationType::Read.matches_operation("read"));
@@ -540,6 +568,8 @@ mod macos_impl {
             assert!(OperationType::Create.matches_operation("open"));
             assert!(OperationType::Delete.matches_operation("unlink"));
             assert!(OperationType::Move.matches_operation("rename"));
+            assert!(OperationType::Chmod.matches_operation("chmod"));
+            assert!(OperationType::Chmod.matches_operation("chmod_extended"));
 
             assert!(OperationType::All.matches_operation("anything"));
         }
