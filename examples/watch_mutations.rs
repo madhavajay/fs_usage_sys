@@ -10,13 +10,15 @@ fn main() -> Result<()> {
     // Create monitor that only watches real write/mutation events
     let mut monitor = FsUsageMonitorBuilder::new()
         .watch_path("/Users/madhavajay/dev/icaros/workspace2/lol")
-        .watch_mutations_only()  // Only watch write, delete, rename, chmod
-        .exact_path_matching(true)  // Use efficient exact path matching
+        .watch_mutations_only() // Only watch write, delete, rename, chmod
+        .exact_path_matching(true) // Use efficient exact path matching
         .build()?;
 
     monitor.start()?;
     println!("Monitor started. Watching for mutations only...");
-    println!("Try editing, saving, renaming, or changing permissions on files in the watched directory.");
+    println!(
+        "Try editing, saving, renaming, or changing permissions on files in the watched directory."
+    );
     println!("Press Ctrl+C to stop");
 
     // Process events

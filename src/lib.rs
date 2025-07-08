@@ -63,10 +63,21 @@ mod macos_impl {
                     operation,
                     "read" | "pread" | "readv" | "preadv" | "RdData" | "RdMeta"
                 ),
-                OperationType::Write => matches!(
-                    operation,
-                    "write" | "pwrite" | "writev" | "pwritev" | "WrData" | "WrMeta" | "ftruncate" | "rename" | "unlink" | "chmod_extended"
-                ) || operation.starts_with("WrData["),
+                OperationType::Write => {
+                    matches!(
+                        operation,
+                        "write"
+                            | "pwrite"
+                            | "writev"
+                            | "pwritev"
+                            | "WrData"
+                            | "WrMeta"
+                            | "ftruncate"
+                            | "rename"
+                            | "unlink"
+                            | "chmod_extended"
+                    ) || operation.starts_with("WrData[")
+                }
                 OperationType::Create => matches!(
                     operation,
                     "open" | "creat" | "mkdir" | "mkfifo" | "mknod" | "symlink" | "link"
@@ -120,7 +131,11 @@ mod macos_impl {
                 watch_paths: vec![],
                 watch_pids: vec![],
                 exclude_pids: vec![],
-                exclude_processes: vec!["mds".to_string(), "mdworker".to_string(), "fseventsd".to_string()],
+                exclude_processes: vec![
+                    "mds".to_string(),
+                    "mdworker".to_string(),
+                    "fseventsd".to_string(),
+                ],
                 operation_types: vec![OperationType::All],
                 exact_path_matching: false,
             }
@@ -163,9 +178,9 @@ mod macos_impl {
             }
 
             let mut cmd = Command::new("fs_usage");
-            cmd.arg("-w")  // Wide format for detailed output
+            cmd.arg("-w") // Wide format for detailed output
                 .arg("-f")
-                .arg("pathname,filesys")  // Both pathname and filesys events for better coverage
+                .arg("pathname,filesys") // Both pathname and filesys events for better coverage
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null());
 
@@ -297,35 +312,35 @@ mod macos_impl {
             // WrData format: timestamp WrData[A] D=0x... B=0x... /dev/disk... actual/path duration W process.pid
             let mut actual_path = None;
             let mut device_path_seen = false;
-            
+
             for (i, part) in parts.iter().enumerate() {
                 if i < 2 || i >= parts.len() - 3 {
                     continue; // Skip timestamp, operation, and last 3 parts
                 }
-                
+
                 // Skip D= and B= parameters
                 if part.starts_with("D=") || part.starts_with("B=") {
                     continue;
                 }
-                
+
                 // Check if this is a device path
                 if part.starts_with("/dev/") {
                     device_path_seen = true;
                     continue;
                 }
-                
+
                 // If we've seen a device path and this contains a path separator, it's our file
                 if device_path_seen && part.contains('/') {
                     actual_path = Some(part.to_string());
                     break;
                 }
-                
+
                 // If no device path but contains /, might be the file path
                 if !device_path_seen && part.contains('/') {
                     actual_path = Some(part.to_string());
                 }
             }
-            
+
             if let Some(path) = actual_path {
                 return Some(FsEvent {
                     timestamp,
@@ -337,7 +352,7 @@ mod macos_impl {
                 });
             }
         }
-        
+
         // Original parsing logic for non-WrData/RdData operations
         let mut path_parts = Vec::new();
         let mut found_path_start = false;
@@ -349,7 +364,7 @@ mod macos_impl {
             if i >= parts.len() - 2 {
                 break;
             } // Skip duration and process.pid
-            
+
             // Skip optional info like [  2], F=86, B=0xea, D=0x...
             if part.starts_with('[') && part.ends_with(']') {
                 continue;
@@ -357,7 +372,7 @@ mod macos_impl {
             if part.starts_with("F=") || part.starts_with("B=") || part.starts_with("D=") {
                 continue;
             }
-            
+
             // Skip single character flags like "W" or "R"
             if part.len() == 1 && (*part == "W" || *part == "R") {
                 continue;
@@ -467,7 +482,7 @@ mod macos_impl {
                         .and_then(|n| n.to_str())
                         .unwrap_or(watch_path)
                 );
-                
+
                 if event.path.contains(&abs_path) || event.path.contains(&rel_path) {
                     debug!(
                         "Exact match: path '{}' contains '{}' or '{}'",
@@ -524,13 +539,13 @@ mod macos_impl {
             assert_eq!(event2.pid, 3515250);
             assert_eq!(event2.path, "/tmp/LittleSnitchDebugLogs");
         }
-        
+
         #[test]
         fn test_parse_wrdata_format() {
             // Test the exact WrData format from the issue
             let line = "21:35:08.701508    WrData[A]       D=0x1b3f3978  B=0x1000   /dev/disk3s5    test/test/fs_direct_test.txt      0.000303 W bash.424229";
             let event = parse_fs_usage_line(line).unwrap();
-            
+
             assert_eq!(event.timestamp, "21:35:08.701508");
             assert_eq!(event.operation, "WrData[A]");
             assert_eq!(event.process_name, "bash");
